@@ -7,7 +7,7 @@
 namespace ts {
 
 template < class Key, class Value, class Hash = std::hash<Key>>
-class ts_map {
+class map {
 private:
     class bucket {
         typedef std::pair<Key, Value> bucket_value;
@@ -15,7 +15,7 @@ private:
         typedef typename std::list<bucket_value>::const_iterator const_bucket_iterator;
         typedef typename std::list<bucket_value>::iterator bucket_iterator;
         mutable std::shared_mutex _m;
-        friend class ts_map;
+        friend class map;
 
     public:
         bucket(): _list() {}
@@ -82,14 +82,14 @@ private:
     std::vector<bucket> _buckets;
 
 public:
-    ts_map(
+    map(
         int bucket_size = _default_bucket_size, 
         const Hash& hash = Hash())
         : _bucket_size(bucket_size),
           _hash(hash),
           _buckets(_bucket_size) { }
-    ts_map(const ts_map&) = delete;
-    ts_map& operator=(const ts_map&) = delete;
+    map(const map&) = delete;
+    map& operator=(const map&) = delete;
 
     bucket& get_bucket(const Key& key) {
         return _buckets[_hash(key)%_bucket_size];

@@ -1,10 +1,10 @@
 #include <gtest/gtest.h>
 
-#include "../ts_map.hpp"
+#include "../ts_tuned_map.hpp"
 
 TEST(ts_map, multithreadrun) {
 
-    ts::ts_map<int, std::string> m;
+    ts::fine_tuned::map<int, std::string> m;
 
     std::thread t1([&m]{
         int times = 0;
@@ -39,6 +39,8 @@ TEST(ts_map, multithreadrun) {
     // erase even if m had no 'index' key
     m.erase(2);
     m.clear();
+
+    ASSERT_TRUE(m.empty());
 
     std::thread t2([&m]{
         int times = 0;

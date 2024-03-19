@@ -1,35 +1,26 @@
-
 #include <iostream>
+#include <string>
 #include <functional>
 #include <memory>
-#include <shared_mutex>
+#include <mutex>
 #include <map>
 
 #include "ts_list.hpp"
 
-namespace ts { 
-namespace tuned {
+namespace ts { namespace fine_tuned {
 
 template < class Key, class Value, class Hash = std::hash<Key>>
-class ts_map {
+class map {
 private:
     class bucket {
+    private:
         typedef std::pair<Key, Value> bucket_value;
-        ts::list<bucket_value> _list;
-        typedef typename std::list<bucket_value>::const_iterator const_bucket_iterator;
-        typedef typename std::list<bucket_value>::iterator bucket_iterator;
-        mutable std::shared_mutex _m;
-        friend class ts_map;
+        list<bucket_value> _list;
 
     public:
         bucket(): _list() {}
-        bucket(const bucket& other) {
-            this->_list = other._list;
-        }
-        bucket& operator=(const bucket& other) {
-            this->_list = other._list;
-            return *this;
-        }
+        bucket(const bucket& other) = delete;
+        bucket& operator=(const bucket& other) = delete;
         bucket(bucket&& other) {
             this->_list = std::move(other._list);
         }
@@ -38,45 +29,36 @@ private:
             return *this;
         }
 
-        const_bucket_iterator find_cons_iterator(const Key& key) const {
-            return std::find_if(_list.cbegin(), _list.cend(), [&](const bucket_value& item) {
-                return item.first == key;
-                });
-        }
-
-        bucket_iterator find_iterator(const Key& key) {
-            return std::find_if(_list.begin(), _list.end(), [&](const bucket_value& item) {
-                return item.first == key;
-                });
-        }
-
         bool find(const Key& key) const {
-            std::shared_lock l(_m);
-            auto it = find_cons_iterator(key);
-            return it != _list.cend();
+            auto item = _list.find_first_if([&](const bucket_value& data) {
+                return data.first == key;
+            });
+            return (bool)item;
         }
 
         Value get(const Key& key) const {
-            std::shared_lock l(_m);
-            auto it = find_cons_iterator(key);
-            return it == _list.cend() ? Value() : it->second;
+            auto item = _list.find_first_if([&](const bucket_value& data) {
+                return data.first == key;
+            });
+            return (bool)item ? item->second : Value();
         }
 
         void insert(const Key& key, const Value& value) {
-            std::unique_lock l(_m);
-            auto it = find_iterator(key);
-            if (it == _list.cend())
-                _list.push_back(bucket_value(key, value));
-            else
-                it->second = value;
+            _list.insert(
+                [&](const bucket_value& data) {
+                    return data.first == key;
+                }, bucket_value(key, value));
         }
 
         void erase(const Key& key) {
-            std::unique_lock l(_m);
-            auto it = find_cons_iterator(key);
-            if (it != _list.cend())
-                _list.erase(it);
+            _list.remove_if([&](const bucket_value& data) {
+                return data.first == key;
+            });
         }
+
+        int size() const { return _list.size(); }
+        void clear() { _list.clear(); }
+        std::list<bucket_value> get_list() const { return _list.get_list(); }
     };
 
 private:
@@ -86,14 +68,14 @@ private:
     std::vector<bucket> _buckets;
 
 public:
-    ts_map(
+    map(
         int bucket_size = _default_bucket_size, 
         const Hash& hash = Hash())
         : _bucket_size(bucket_size),
           _hash(hash),
           _buckets(_bucket_size) { }
-    ts_map(const ts_map&) = delete;
-    ts_map& operator=(const ts_map&) = delete;
+    map(const map&) = delete;
+    map& operator=(const map&) = delete;
 
     bucket& get_bucket(const Key& key) {
         return _buckets[_hash(key)%_bucket_size];
@@ -118,21 +100,10 @@ public:
         get_bucket(key).erase(key);
     }
 
-    std::vector<std::unique_lock<std::shared_mutex>> lock_all_buckets() const {
-
-        std::vector<std::unique_lock<std::shared_mutex>> lock_vector;
-        for (auto it = _buckets.cbegin(); it != _buckets.cend(); ++it) {
-            lock_vector.push_back(std::unique_lock(it->_m));
-        }
-
-        return lock_vector;
-    }
-
     int size() const {
         int size = 0;
-        auto lock_vector = lock_all_buckets();
         for (auto it = _buckets.cbegin(); it != _buckets.cend(); ++it)
-            size += it->_list.size();
+            size += it->size();
         return size;
     }
 
@@ -141,21 +112,19 @@ public:
     }
     
     void clear() {
-        auto lock_vector = lock_all_buckets();
         for (auto it = _buckets.begin(); it != _buckets.end(); ++it)
-            it->_list.clear();
+            it->clear();
     }
 
-    std::map<Key, Value> get_map() {
+    std::map<Key, Value> get_map() const {
         std::map<Key, Value> map;
-        auto lock_vector = lock_all_buckets();
         for (auto it = _buckets.cbegin(); it != _buckets.cend(); ++it) {
-            auto& list = it->_list;
+            auto list = it->get_list();
             for (auto& ele : list)
                 map.insert(ele);
         }
         return map;
     }
 };
-} // namespace tuned
-} // namespace ts
+}// fine_tuned
+}// ts
