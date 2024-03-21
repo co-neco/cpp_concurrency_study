@@ -3,7 +3,7 @@
 
 int main(int argc, char* argv[]) {
 
-    ts_stack<int> s;
+    ts::stack<int> s;
     s.push(3);
     s.push(1);
     s.push(11);

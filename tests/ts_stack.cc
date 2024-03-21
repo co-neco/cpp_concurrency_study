@@ -4,9 +4,9 @@
 #include <iostream>
 #include <thread>
 
-TEST(ts_stack, multithreadrun) {
+TEST(stack, ts) {
 
-    ts_stack<std::string> s;
+    ts::stack<std::string> s;
 
     std::thread t1([&s]{
         int times = 0;
@@ -27,4 +27,13 @@ TEST(ts_stack, multithreadrun) {
     t2.join();
     ASSERT_FALSE(s.empty());
     ASSERT_EQ(s.size(), 20000);
+}
+
+TEST(stack, lock_free) {
+
+    ts::lock_free::stack<std::string> s;
+    s.push("abc");
+    auto str = s.pop();
+    ASSERT_TRUE(!str->compare("abc"));
+    ASSERT_TRUE(s.empty());
 }
