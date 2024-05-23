@@ -3,15 +3,14 @@
 
 int main(int argc, char* argv[]) {
 
-    ts::stack<int> s;
+    ts::lock_free::stack<int> s;
     s.push(3);
     s.push(1);
     s.push(11);
     s.push(13);
 
-    int a;
-    s.pop(a);
-    std::cout << "first pop: " << a << "\n";
+    auto rs = s.pop();
+    std::cout << "first pop: " << *rs << "\n";
 
     auto b = s.pop();
     std::cout << "second pop: " << *b.get() << "\n";
