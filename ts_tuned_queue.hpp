@@ -45,7 +45,7 @@ public:
         return _tail;
     }
 
-    std::unique_lock<std::mutex> wait_item() {
+    _Acquires_lock_(return) std::unique_lock<std::mutex> wait_item() {
         std::unique_lock<std::mutex> l(_hm);
         _cond.wait(l, [this] { return _head.get() != get_tail(); });
         return l;

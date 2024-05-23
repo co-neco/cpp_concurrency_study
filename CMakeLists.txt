@@ -14,7 +14,7 @@ target_compile_options(compiler_flags INTERFACE
 enable_testing()
 add_subdirectory(tests)
 
-add_executable(ConcurrentClass main.cpp)
+add_executable(ConcurrentClass main.cpp utils/hazard_pointer.cpp)
 target_link_libraries(
     ConcurrentClass PUBLIC 
     compiler_flags)
