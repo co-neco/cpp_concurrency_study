@@ -90,28 +90,11 @@ public:
         while (!_head.compare_exchange_weak(item->_next, item));
     }
 
-private:
-    std::atomic<void*>& get_hazard_pointer_for_cur_thread() {
-        thread_local static hp_owner hp;
-        return hp.get_pointer();
-    }
-
-    bool outstanding_hazard_pointer_for(node* n) {
-        return true;
-    }
-
-    void reclaim_later(node* n) {
-
-    }
-
-    void delete_nodes_with_no_hazards() {
-
-    }
-
 public:
     std::shared_ptr<T> pop() {
 
-        std::atomic<void*>& hp = get_hazard_pointer_for_cur_thread();
+        hp_owner& hp_instance = hp_owner::get_hazard_pointer_for_cur_thread();
+        std::atomic<void*>& hp = hp_instance.get_pointer();
         node* old_head = _head.load();
 
         node* temp;
@@ -130,13 +113,13 @@ public:
         if (old_head) {
             
             res.swap(old_head->_data);
-            if (outstanding_hazard_pointer_for(old_head)) {
-                reclaim_later(old_head);
+            if (hp_owner::outstanding_hazard_pointer_for(old_head)) {
+                hp_instance.reclaim_later(old_head);
             }
             else {
                 delete old_head;
             }
-            delete_nodes_with_no_hazards();
+            hp_instance.delete_nodes_with_no_hazards();
         }
 
         return res;

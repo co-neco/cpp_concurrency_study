@@ -12,7 +12,8 @@ include(CTest)
 add_executable(ts_stack_test 
     ts_stack.cc
     ts_queue.cc
-    ts_map.cc)
+    ts_map.cc
+    ../utils/hazard_pointer.cpp)
 target_compile_features(ts_stack_test PRIVATE cxx_std_17)
 target_link_libraries(
     ts_stack_test
