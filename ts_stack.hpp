@@ -73,7 +73,7 @@ private:
         std::atomic<int> _internal_count;
         counted_node _next;
         // Used for allocation and deallocation test
-        static int _allocated_num, _deallocated_num;
+        static std::atomic<int> _allocated_num, _deallocated_num;
         node (const T& data): 
             _data(std::make_shared<T>(data)), 
             _internal_count(0), _next() { }
@@ -89,6 +89,8 @@ private:
     };
 public:
     static bool is_mem_operation_correct() {
+        std::cout << "node::_allocated_num: " << node::_allocated_num.load() << "\n";
+        std::cout << "node::_deallocated_num: " << node::_deallocated_num.load() << "\n";
         return node::_allocated_num == node::_deallocated_num;
     }
 private:
@@ -157,8 +159,8 @@ public:
 };
 
 template < class T >
-int stack<T>::node::_allocated_num = 0;
+std::atomic<int> stack<T>::node::_allocated_num = 0;
 template < class T >
-int stack<T>::node::_deallocated_num = 0;
+std::atomic<int> stack<T>::node::_deallocated_num = 0;
 }// lock_free
 }// ts
