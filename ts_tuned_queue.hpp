@@ -4,7 +4,8 @@
 #include <mutex>
 #include <memory>
 
-namespace ts { namespace fine_tuned {
+namespace ts { 
+namespace fine_tuned {
 
 template < class T >
 class queue {
@@ -123,4 +124,128 @@ public:
     }
 };
 }// fine_tuned
+
+namespace lock_free {
+
+template < class T >
+class queue {
+private:
+    struct node;
+    struct counted_node_ptr {
+        int external_count;
+        node* ptr;
+    };
+    struct node_counter {
+        unsigned int internal_count : 30;
+        unsigned int external_counters : 2;
+    };
+    struct node {
+        std::atomic<T*> _data;
+        counted_node_ptr _next;
+        std::atomic<node_counter> _counter;
+        node() {
+            node_counter counter = { 0, 2 };
+            _counter.exchange(counter);
+
+            _next = { 0, nullptr };
+        }
+        void release_ref() {
+            
+            node_counter old_counter = _counter.load();
+            node_counter new_counter;
+            do {
+                new_counter = old_counter;
+                --new_counter.internal_count;
+            } while (!_counter.compare_exchange_strong(old_counter, new_counter));
+
+            node_counter counter = _counter.load();
+            if (!counter.external_counters && !counter.internal_count)
+                delete this;
+        }
+    };
+
+    std::atomic<counted_node_ptr> _head, _tail;
+
+    static void increase_external_count(std::atomic<counted_node_ptr>& node, counted_node_ptr& old_node) {
+
+        counted_node_ptr new_node;
+        do {
+            new_node = old_node;
+            ++new_node.external_count;
+        } while (!node.compare_exchange_strong(old_node, new_node));
+    }
+
+    static void free_external_count(const counted_node_ptr& node) {
+
+        int increase_num = node.external_count - 2;
+        node_counter old_counter = node.ptr->_counter.load();
+        node_counter new_counter;
+        do {
+            new_counter = old_counter;
+            new_counter.internal_count += increase_num;
+            --new_counter.external_counters;
+        } while (node.ptr->_counter.compare_exchange_strong(old_counter, new_counter));
+
+        node_counter counter = node.ptr->_counter.load();
+        if (!counter.external_counters && !counter.internal_count)
+            delete node.ptr;
+    }
+
+public:
+    queue() {
+        node* n = new node;
+        counted_node_ptr counted_node = { 1, n };
+        _head.store(counted_node);
+        _tail.store(counted_node);
+    }
+    ~queue() {
+        while (pop()) { }
+        delete _head.load().ptr;
+    }
+
+    void push(T data) {
+
+        std::unique_ptr<T> new_data = std::make_unique<T>(std::move(data));
+        node* n = new node;
+        counted_node_ptr new_node = { 1, n };
+
+
+        while (true) {
+            counted_node_ptr old_tail = _tail.load();
+            increase_external_count(_tail, old_tail);
+            T* old_data = nullptr;
+            if (old_tail.ptr->_data.compare_exchange_strong(old_data, new_data.get())) {
+                old_tail.ptr->_next = new_node;
+                // Get the latest tail node, which contains current external count that may change.
+                old_tail = _tail.exchange(new_node);
+                free_external_count(old_tail);
+                new_data.release();
+                break;
+            }
+            old_tail.ptr->release_ref();
+        }
+    }
+
+    std::unique_ptr<T> pop() {
+
+        std::unique_ptr<T> res;
+
+        while (true) {
+            counted_node_ptr old_head = _head.load();
+            increase_external_count(_head, old_head);
+            if (old_head.ptr == _tail.load().ptr) {
+                old_head.ptr->release_ref();
+                return std::unique_ptr<T>();
+            }
+
+            if (_head.compare_exchange_strong(old_head, old_head.ptr->_next)) {
+                res.reset(old_head.ptr->_data.load());
+                free_external_count(old_head);
+                return res;
+            }
+            old_head.ptr->release_ref();
+        }
+    }
+};
+}
 }// ts
